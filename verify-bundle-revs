@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+
+import os
+import yaml
+from subprocess import check_call, check_output
+
+channel = os.environ.get('CHANNEL', 'stable')
+
+bundles = [
+  'charmed-kubernetes',
+  'canonical-kubernetes',
+  'kubernetes-core',
+  'canonical-kubernetes-canal',
+  'kubernetes-calico',
+  'kubernetes-tigera-secure-ee'
+]
+
+bundle_dir = 'verify-bundle-revs.bundle'
+
+mismatches = []
+
+for bundle in bundles:
+  print(bundle)
+  check_call(['rm', '-rf', bundle_dir])
+  print('  Pulling bundle')
+  check_output(['charm', 'pull', 'cs:~containers/' + bundle, '--channel', channel, bundle_dir])
+  with open(bundle_dir + '/bundle.yaml') as f:
+    data = yaml.load(f)
+  print('  Checking apps')
+  apps = data['services']
+  for app_name, app in apps.items():
+    charm = app['charm']
+    charm_base = charm.rpartition('-')[0]
+    charm_rev = int(charm.rpartition('-')[2])
+    output = check_output(['charm', 'show', charm_base, '--channel', channel, '--format', 'yaml'])
+    charm_store_data = yaml.load(output)
+    charm_store_rev = charm_store_data['id-revision']['Revision']
+    if charm_rev == charm_store_rev:
+      print('    %s OK: %s, store rev %d' % (app_name, charm, charm_store_rev))
+    else:
+      print('    %s FAIL: %s, store rev %d' % (app_name, charm, charm_store_rev))
+      mismatches.append((bundle, app_name, charm, charm_store_rev))
+
+print('---------------- %s mismatches ----------------' % len(mismatches))
+for mismatch in mismatches:
+  print('%s/%s: bundle rev %s, store rev %s' % mismatch)
