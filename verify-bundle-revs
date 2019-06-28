@@ -25,7 +25,7 @@ for bundle in bundles:
   print('  Pulling bundle')
   check_output(['charm', 'pull', 'cs:~containers/' + bundle, '--channel', channel, bundle_dir])
   with open(bundle_dir + '/bundle.yaml') as f:
-    data = yaml.load(f)
+    data = yaml.safe_load(f)
   print('  Checking apps')
   apps = data['services']
   for app_name, app in apps.items():
@@ -33,7 +33,7 @@ for bundle in bundles:
     charm_base = charm.rpartition('-')[0]
     charm_rev = int(charm.rpartition('-')[2])
     output = check_output(['charm', 'show', charm_base, '--channel', channel, '--format', 'yaml'])
-    charm_store_data = yaml.load(output)
+    charm_store_data = yaml.safe_load(output)
     charm_store_rev = charm_store_data['id-revision']['Revision']
     if charm_rev == charm_store_rev:
       print('    %s OK: %s, store rev %d' % (app_name, charm, charm_store_rev))
