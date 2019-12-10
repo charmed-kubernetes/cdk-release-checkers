@@ -11,7 +11,7 @@ import shutil
 import yaml
 from pprint import pprint
 from subprocess import call, check_output
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 channel = os.environ.get('CHANNEL', "stable")
 branch = os.environ.get('BRANCH', 'stable')
@@ -68,7 +68,9 @@ manifest_urls = [
 observed_commits = {}
 for manifest_url in manifest_urls:
     print('Checking ' + manifest_url)
-    with urlopen(manifest_url) as f:
+    request = Request(manifest_url)
+    request.add_header('Cache-Control', 'max-age=0')
+    with urlopen(request) as f:
         manifest = yaml.safe_load(f)
     for layer in manifest['layers']:
         layer_url = layer['url']

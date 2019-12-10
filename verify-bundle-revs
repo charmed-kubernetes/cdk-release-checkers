@@ -2,7 +2,8 @@
 
 import os
 import yaml
-from subprocess import check_call, check_output
+from subprocess import check_output
+from urllib.request import Request, urlopen
 
 channel = os.environ.get('CHANNEL', 'stable')
 
@@ -15,16 +16,17 @@ bundles = [
   'kubernetes-tigera-secure-ee'
 ]
 
-bundle_dir = 'verify-bundle-revs.bundle'
-
 mismatches = []
 
 for bundle in bundles:
   print(bundle)
-  check_call(['rm', '-rf', bundle_dir])
-  print('  Pulling bundle')
-  check_call(['charm', 'pull', 'cs:~containers/' + bundle, '--channel', channel, bundle_dir])
-  with open(bundle_dir + '/bundle.yaml') as f:
+  print('  Getting bundle')
+  url = 'https://api.jujucharms.com/v5/~containers/%s/archive/bundle.yaml?channel=%s' % (
+    bundle, channel
+  )
+  request = Request(url)
+  request.add_header('Cache-Control', 'max-age=0')
+  with urlopen(request) as f:
     data = yaml.safe_load(f)
   print('  Checking apps')
   apps = data['services']
