@@ -57,7 +57,7 @@ def get_layer_repo(layer_url):
         index_url = index_root + '/%ss/%s.json' % (layer_type, layer_name)
         with urlopen(index_url) as f:
             layer_info = json.load(f)
-        return layer_info['repo']
+        return layer_info['repo'].strip()
 
 
 # Check manifests
@@ -108,19 +108,23 @@ for layer, repo in layer_repos.items():
 pprint(repo_commits)
 
 # Make recommendations
-print('---- RECOMMENDED ACTIONS ----')
+print('---- RESULTS ----')
+clean = True
 for layer, repo_commit in repo_commits.items():
     repo = layer_repos[layer]
     observed_layer_commits = observed_commits[layer]
     if len(observed_layer_commits) == 1:
         observed_commit = list(observed_layer_commits)[0]
         if observed_commit != repo_commit:
-            print('%s: %s to %s' % (
-                repo, branch, observed_commit
+            clean = False
+            print('%s: %s is %s, but charms used commit %s' % (
+                repo, branch, repo_commit, observed_commit
             ))
     else:
-        print('%s: %s to one of %s' % (
+        clean = False
+        print('%s: charms used multiple commits: %s' % (
             repo,
-            branch,
             ', '.join(observed_layer_commits)
         ))
+if clean:
+    print('No mismatches found.')
