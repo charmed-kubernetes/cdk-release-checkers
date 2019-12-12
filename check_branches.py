@@ -8,6 +8,7 @@ what the latest charms in stable were actually built with.
 import json
 import os
 import shutil
+import traceback
 import yaml
 from pprint import pprint
 from subprocess import call, check_output
@@ -15,36 +16,6 @@ from urllib.request import Request, urlopen
 
 channel = os.environ.get('CHANNEL', "stable")
 branch = os.environ.get('BRANCH', 'stable')
-
-charm_urls = [
-  '~containers/easyrsa',
-  '~containers/etcd',
-  '~containers/kubernetes-master',
-  '~containers/kubernetes-worker',
-  '~containers/kubeapi-load-balancer',
-  '~containers/flannel',
-  '~containers/calico',
-  '~containers/canal',
-  '~containers/tigera-secure-ee',
-  '~containers/kubernetes-e2e',
-  '~containers/containerd',
-  '~containers/docker'
-]
-
-charm_repos = {
-  'easyrsa': 'https://github.com/charmed-kubernetes/layer-easyrsa',
-  'etcd': 'https://github.com/charmed-kubernetes/layer-etcd',
-  'kubernetes-master': 'https://github.com/charmed-kubernetes/charm-kubernetes-master',
-  'kubernetes-worker': 'https://github.com/charmed-kubernetes/charm-kubernetes-worker',
-  'kubeapi-load-balancer': 'https://github.com/charmed-kubernetes/charm-kubeapi-load-balancer',
-  'flannel': 'https://github.com/charmed-kubernetes/charm-flannel',
-  'calico': 'https://github.com/charmed-kubernetes/layer-calico',
-  'canal': 'https://github.com/charmed-kubernetes/layer-canal',
-  'tigera-secure-ee': 'https://github.com/charmed-kubernetes/layer-tigera-secure-ee',
-  'kubernetes-e2e': 'https://github.com/charmed-kubernetes/charm-kubernetes-e2e',
-  'containerd': 'https://github.com/charmed-kubernetes/charm-containerd',
-  'docker': 'https://github.com/charmed-kubernetes/charm-docker'
-}
 
 index_root = 'https://raw.githubusercontent.com/charmed-kubernetes/layer-index/master'
 
@@ -60,6 +31,23 @@ def get_layer_repo(layer_url):
         return layer_info['repo'].strip()
 
 
+results = []
+
+# Get CI charm info
+print('Getting charm info from CI')
+with urlopen('https://raw.githubusercontent.com/charmed-kubernetes/jenkins/master/jobs/includes/charm-support-matrix.inc') as f:
+    charm_support_matrix = yaml.safe_load(f)
+
+charms = [
+    (name, data)
+    for dict in charm_support_matrix
+    for name, data in dict.items()
+    if 'k8s' in data['tags']
+]
+pprint(charms)
+charm_urls = ['~%s/%s' % (data['namespace'], name) for name, data in charms]
+charm_repos = {name: 'https://github.com/' + data['downstream'] for name, data in charms}
+
 # Check manifests
 manifest_urls = [
     'https://api.jujucharms.com/v5/%s/archive/.build.manifest?channel=%s' % (charm_url, channel)
@@ -70,14 +58,18 @@ for manifest_url in manifest_urls:
     print('Checking ' + manifest_url)
     request = Request(manifest_url)
     request.add_header('Cache-Control', 'max-age=0')
-    with urlopen(request) as f:
-        manifest = yaml.safe_load(f)
-    for layer in manifest['layers']:
-        layer_url = layer['url']
-        layer_rev = layer['rev']
-        if ':' not in layer_url:
-            layer_url = 'charm:' + layer_url
-        observed_commits.setdefault(layer_url, set()).add(layer_rev)
+    try:
+        with urlopen(request) as f:
+            manifest = yaml.safe_load(f)
+        for layer in manifest['layers']:
+            layer_url = layer['url']
+            layer_rev = layer['rev']
+            if ':' not in layer_url:
+                layer_url = 'charm:' + layer_url
+            observed_commits.setdefault(layer_url, set()).add(layer_rev)
+    except Exception:
+        traceback.print_exc()
+        results.append('Failed to reach ' + manifest_url)
 pprint(observed_commits)
 
 # Map observed layers to repos
@@ -109,9 +101,8 @@ for layer, repo in layer_repos.items():
 
 pprint(repo_commits)
 
-# Make recommendations
+# Check for mismatches
 print('---- RESULTS ----')
-clean = True
 for layer, repo_commit in repo_commits.items():
     repo = layer_repos[layer]
     observed_layer_commits = observed_commits[layer]
@@ -119,14 +110,18 @@ for layer, repo_commit in repo_commits.items():
         observed_commit = list(observed_layer_commits)[0]
         if observed_commit != repo_commit:
             clean = False
-            print('%s: %s is %s, but charms used commit %s' % (
+            results.append('%s: %s is %s, but charms used commit %s' % (
                 repo, branch, repo_commit, observed_commit
             ))
     else:
-        clean = False
-        print('%s: charms used multiple commits: %s' % (
+        results.append('%s: charms used multiple commits: %s' % (
             repo,
             ', '.join(observed_layer_commits)
         ))
-if clean:
-    print('No mismatches found.')
+
+# Print results
+if results:
+    for line in results:
+        print(line)
+else:
+    print('No issues found.')
