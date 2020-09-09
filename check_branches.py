@@ -88,8 +88,6 @@ for layer, repo in layer_repos.items():
     cmd = [
         'git', 'clone', repo, 'repo',
         '--branch', branch,
-        '--depth', '1',
-        '--single-branch'
     ]
     exit_code = call(cmd)
     if exit_code != 0:
@@ -98,6 +96,10 @@ for layer, repo in layer_repos.items():
         continue
     commit = check_output(['git', 'log', '-1', '--format=%H'], cwd='repo').decode('UTF-8').strip()
     repo_commits[layer] = commit
+    differs = call(['git', 'diff', '-s', '--exit-code', 'origin/master'], cwd='repo')
+    if differs:
+        results.append('warning: %s %s differs from master' % (repo, branch))
+    print(differs)
 
 pprint(repo_commits)
 
