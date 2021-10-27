@@ -29,7 +29,7 @@ for bundle in bundles:
   with urlopen(request) as f:
     data = yaml.safe_load(f)
   print('  Checking apps')
-  apps = data['services']
+  apps = data['applications']
   for app_name, app in apps.items():
     charm = app['charm']
     charm_base = charm.rpartition('-')[0]
