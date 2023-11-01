@@ -1,3 +1,6 @@
+DEPRECATED: These scripts were used to verify release commits and revisions of
+reactive charms published to the old Charm Store. They are no longer used.
+
 A couple scripts I've been using to verify commits and revisions in
 Charmed Kubernetes releases. Long-term this functionality (not necessarily
 these scripts) should land in https://github.com/charmed-kubernetes/jenkins.
